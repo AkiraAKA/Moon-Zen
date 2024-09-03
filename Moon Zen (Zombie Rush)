@@ -1,0 +1,174 @@
+-- Moon Zen
+
+-- Global configuration to store script state and settings
+_G.MoonZenConfig = {
+    ScriptName = "Moon Zen",
+    NotificationTitle = "Moon Zen Loaded!",
+    NotificationText = "Discord - meowbucks",
+    KillFunctionReady = false,
+}
+
+-- Safe loader function for MoonLib library
+local function safeLoadMoonLib()
+    local success, result = pcall(function()
+        return loadstring(game:HttpGet('https://raw.githubusercontent.com/jakepscripts/moonlib/main/moonlibv1.lua'))()
+    end)
+    
+    if success then
+        return result
+    else
+        warn("Error loading MoonLib: " .. tostring(result))
+        return nil
+    end
+end
+
+-- Function to detect potential anti-cheat measures and suspicious activity
+local function detectSuspiciousActivity()
+    local suspiciousActivityDetected = false
+
+    -- Check for anti-cheat objects in Workspace
+    if workspace:FindFirstChild("AntiCheatObject") then
+        suspiciousActivityDetected = true
+        warn("AntiCheatObject detected in Workspace.")
+    end
+
+    -- Check for detection UI elements in PlayerGui
+    if game.Players.LocalPlayer.PlayerGui:FindFirstChild("DetectionNotice") then
+        suspiciousActivityDetected = true
+        warn("DetectionNotice found in PlayerGui.")
+    end
+
+    -- Monitor for sudden changes in player position
+    local lastPosition
+    local hrp = game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+    if hrp then
+        lastPosition = hrp.Position
+        game:GetService("RunService").RenderStepped:Connect(function()
+            if (lastPosition - hrp.Position).magnitude > 50 then
+                suspiciousActivityDetected = true
+                warn("Significant position change detected, possible anti-cheat.")
+            end
+            lastPosition = hrp.Position
+        end)
+    end
+
+    return suspiciousActivityDetected
+end
+
+-- Function to get the currently equipped weapon/tool
+local function getCurrentWeapon()
+    local player = game.Players.LocalPlayer
+    local character = player and player.Character
+
+    if character then
+        for _, item in ipairs(character:GetChildren()) do
+            if item:IsA("Tool") then
+                return item
+            end
+        end
+    end
+
+    return nil
+end
+
+-- Function to handle the zombie-killing functionality using the player's current weapon
+local function killAllZombiesWithWeapon(weapon)
+    -- Use pcall to safely execute the kill logic
+    local success, err = xpcall(function()
+        for _, model in pairs(workspace:GetChildren()) do
+            if model:IsA("Model") and model:FindFirstChildOfClass("Humanoid") and model.Name:match("Zombie") then
+                local humanoid = model:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    humanoid.Health = 0
+                end
+            end
+        end
+    end, function(errorMsg)
+        warn("Error during zombie kill execution: " .. tostring(errorMsg))
+    end)
+
+    if not success then
+        warn("Zombie killing failed. Error: " .. tostring(err))
+    end
+end
+
+-- Function to safely execute the kill-all-zombies logic
+local function executeKillAll()
+    local currentWeapon = getCurrentWeapon()
+
+    if currentWeapon then
+        _G.MoonZenConfig.KillFunctionReady = true
+        killAllZombiesWithWeapon(currentWeapon)
+    else
+        warn("No weapon equipped. Please equip a weapon to use the kill-all functionality.")
+    end
+end
+
+-- Compatibility check function to ensure script can run without errors
+local function checkCompatibility()
+    -- Ensure the game environment is loaded correctly
+    if not workspace:FindFirstChild("CurrentCamera") then
+        warn("CurrentCamera missing from Workspace. Check game environment.")
+        return false
+    end
+
+    if not game.Players.LocalPlayer then
+        warn("LocalPlayer not found. Ensure script is run in a player context.")
+        return false
+    end
+
+    if not game:IsLoaded() then
+        warn("Game is not fully loaded. Please wait for the game to load completely.")
+        return false
+    end
+
+    if not game.Players.LocalPlayer.Character then
+        warn("Character is not loaded. Please wait for the character to fully load.")
+        return false
+    end
+
+    return true
+end
+
+-- Function to safely stop the script if suspicious activity is detected
+local function emergencyStop()
+    warn("Emergency stop triggered. Halting script to avoid detection.")
+
+    -- Disconnect all connections to prevent further execution
+    for _, connection in ipairs(getconnections(game:GetService("RunService").RenderStepped)) do
+        connection:Disable()
+    end
+
+    -- Clean up any UI elements that might trigger detection
+    local playerGui = game.Players.LocalPlayer.PlayerGui
+    if playerGui:FindFirstChild("ScriptGUI") then
+        playerGui.ScriptGUI:Destroy()
+    end
+end
+
+-- Function to show an AkaliNotif notification
+local function showNotification()
+    pcall(function()
+        local StarterGui = game:GetService("StarterGui")
+        StarterGui:SetCore("SendNotification", {
+            Title = _G.MoonZenConfig.NotificationTitle,
+            Text = _G.MoonZenConfig.NotificationText,
+            Duration = 5
+        })
+    end)
+end
+
+-- Main script execution flow
+local moonLib = safeLoadMoonLib()
+
+if moonLib and checkCompatibility() then
+    if detectSuspiciousActivity() then
+        emergencyStop()
+    else
+        showNotification()
+        executeKillAll()
+    end
+else
+    warn("Script cannot run: Incompatible environment or library loading error.")
+end
