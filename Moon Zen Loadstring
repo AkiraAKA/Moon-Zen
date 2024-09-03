@@ -1,0 +1,1 @@
+loadstring(game:HttpGet("https://raw.githubusercontent.com/AkiraAKA/Moon-Zen/main/Moon%20Zen%20(Zombie%20Rush)"))() 
